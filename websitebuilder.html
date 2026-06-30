@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Website Builder (with Memory)</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial,sans-serif;
+}
+
+body{
+    background:#f4f4f4;
+    padding:30px;
+}
+
+.container{
+    max-width:900px;
+    margin:auto;
+    background:white;
+    padding:20px;
+    border-radius:10px;
+    box-shadow:0 0 10px rgba(0,0,0,0.1);
+}
+
+h1{
+    text-align:center;
+    margin-bottom:5px;
+}
+
+.subtitle {
+    text-align: center;
+    color: #666;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+input,
+textarea{
+    width:100%;
+    padding:12px;
+    margin-top:10px;
+    border:1px solid #ccc;
+    border-radius:6px;
+}
+
+textarea{
+    min-height:120px;
+    resize:vertical;
+}
+
+.btn-container {
+    display: flex;
+    gap: 10px;
+}
+
+button{
+    margin-top:15px;
+    padding:12px 20px;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+    background:#2563eb;
+    color:white;
+    font-size:16px;
+    flex: 1;
+}
+
+button:hover{
+    background:#1d4ed8;
+}
+
+button.clear-btn {
+    background: #dc2626;
+}
+button.clear-btn:hover {
+    background: #b91c1c;
+}
+
+#status{
+    margin-top:15px;
+    font-weight:bold;
+}
+
+#history-preview {
+    margin-top: 15px;
+    padding: 10px;
+    background: #eef2ff;
+    border-left: 4px solid #2563eb;
+    border-radius: 4px;
+    font-size: 13px;
+    max-height: 100px;
+    overflow-y: auto;
+}
+
+#logs{
+    margin-top:20px;
+    background:#111;
+    color:#0f0;
+    padding:15px;
+    border-radius:6px;
+    white-space:pre-wrap;
+}
+
+#response{
+    margin-top:20px;
+    padding:15px;
+    background:#f7f7f7;
+    border-radius:6px;
+    white-space:pre-wrap;
+    overflow:auto;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+    <h1>AI Website Builder</h1>
+    <div class="subtitle">Prompts build upon each other continuously</div>
+
+    <label>Gemini API Key</label>
+    <input
+        type="password"
+        id="api_key"
+        placeholder="Enter Gemini API Key"
+    >
+
+    <label style="display:block;margin-top:15px;">
+        Next Instruction / Edit
+    </label>
+
+    <textarea
+        id="prompt"
+        placeholder="Describe a change or a new website piece..."
+    ></textarea>
+
+    <div class="btn-container">
+        <button onclick="generateWebsite()">
+            Generate / Update Website
+        </button>
+        <button class="clear-btn" onclick="clearHistory()">
+            Reset Context
+        </button>
+    </div>
+
+    <div id="history-preview" style="display: none;"></div>
+
+    <div id="status"></div>
+
+    <div id="logs"></div>
+
+    <div id="response"></div>
+
+</div>
+
+<script>
+// This string holds the full combined history across generations
+let conversationHistory = "";
+
+async function generateWebsite(){
+    const apiKey = document.getElementById("api_key").value;
+    const currentPrompt = document.getElementById("prompt").value.trim();
+    
+    const status = document.getElementById("status");
+    const logs = document.getElementById("logs");
+    const responseBox = document.getElementById("response");
+    const historyPreview = document.getElementById("history-preview");
+
+    if (!currentPrompt) {
+        alert("Please enter an instruction.");
+        return;
+    }
+
+    // Build upon previous prompt instructions
+    if (conversationHistory === "") {
+        conversationHistory = "User Request Sequence:\n1. " + currentPrompt;
+    } else {
+        // Count existing steps to keep sequence organized
+        const stepCount = conversationHistory.split("\n").length;
+        conversationHistory += `\n${stepCount}. ` + currentPrompt;
+    }
+
+    // Show the user what the combined context looks like
+    historyPreview.style.display = "block";
+    historyPreview.innerText = "Sent Context:\n" + conversationHistory;
+
+    status.innerText = "Generating with updated context...";
+    logs.innerText = "";
+    responseBox.innerText = "";
+
+    try{
+        const response = await fetch("/generate", {
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                api_key: apiKey,
+                prompt: conversationHistory // Sending the stacked prompt history
+            })
+        });
+
+        const data = await response.json();
+
+        if(data.success){
+            status.innerText = "Completed Successfully";
+            if(data.logs){
+                logs.innerText = data.logs.join("\n");
+            }
+            responseBox.innerText = data.reply || "";
+            // Clear current prompt box so user can type the next adjustment easily
+            document.getElementById("prompt").value = "";
+        }
+        else{
+            status.innerText = "Error";
+            responseBox.innerText = data.message || "Unknown Error";
+        }
+    }
+    catch(error){
+        status.innerText = "Request Failed";
+        responseBox.innerText = error.toString();
+    }
+}
+
+function clearHistory() {
+    conversationHistory = "";
+    document.getElementById("history-preview").style.display = "none";
+    document.getElementById("history-preview").innerText = "";
+    document.getElementById("prompt").value = "";
+    document.getElementById("status").innerText = "Context reset successfully.";
+}
+</script>
+
+</body>
+</html>
